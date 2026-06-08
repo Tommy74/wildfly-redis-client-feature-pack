@@ -29,15 +29,19 @@ If you want to skip the manual setup (steps 3–6 below), you can use the `redis
 
 ```bash
 # Start Redis
-podman run -d --name redis -p 6379:6379 redis:7-alpine
+podman run --rm -it --name redis -p 6379:6379 redis:7-alpine
+```
 
+```bash
 # Build the entire project
 cd redis-client-feature-pack
 mvn clean install -DskipTests -Denforcer.skip
+```
 
+```bash
 # Provision and run the example
-cd ../redis-client-example
-mvn wildfly:provision wildfly:dev
+cd redis-client-example
+mvn clean wildfly:provision wildfly:dev
 ```
 
 The application starts at `http://localhost:8080/redis-example/api/redis`. You can use it as-is to experiment with the subsystem, or copy it as a starting point for your own application.
@@ -218,7 +222,7 @@ mvn clean install -DskipTests
 
 # Provision and run the example
 cd redis-client-example
-mvn wildfly:provision wildfly:dev
+mvn clean wildfly:provision wildfly:dev
 ```
 
 Then in another terminal:

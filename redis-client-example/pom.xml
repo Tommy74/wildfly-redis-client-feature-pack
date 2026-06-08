@@ -66,6 +66,9 @@
                     <galleon-options>
                         <jboss-fork-embedded>true</jboss-fork-embedded>
                     </galleon-options>
+                    <commands>
+                        <command>/subsystem=redis-client/redis-connection=default:add(redis-host=localhost, port=6379)</command>
+                    </commands>
                 </configuration>
             </plugin>
         </plugins>
