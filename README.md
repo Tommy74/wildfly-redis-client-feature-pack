@@ -13,15 +13,34 @@ A WildFly Galleon feature pack that provides Redis client support via [Jedis](ht
 ### 1. Start a local Redis instance
 
 ```bash
-podman run -d --name redis -p 6379:6379 redis:7-alpine
+podman run --rm -it --name redis -p 6379:6379 redis:7-alpine
 ```
 
 ### 2. Build the feature pack
 
 ```bash
 cd redis-client-feature-pack
-mvn clean install -DskipTests
+mvn clean install -DskipTests -Denforcer.skip
 ```
+
+### Alternative: use the included example application
+
+If you want to skip the manual setup (steps 3–6 below), you can use the `redis-client-example` module that ships with this project. It is a ready-to-run JAX-RS application with Redis `set`, `get`, and `delete` endpoints already wired up:
+
+```bash
+# Start Redis
+podman run -d --name redis -p 6379:6379 redis:7-alpine
+
+# Build the entire project
+cd redis-client-feature-pack
+mvn clean install -DskipTests -Denforcer.skip
+
+# Provision and run the example
+cd ../redis-client-example
+mvn wildfly:provision wildfly:dev
+```
+
+The application starts at `http://localhost:8080/redis-example/api/redis`. You can use it as-is to experiment with the subsystem, or copy it as a starting point for your own application.
 
 ### 3. Provision a WildFly server with Redis support
 
