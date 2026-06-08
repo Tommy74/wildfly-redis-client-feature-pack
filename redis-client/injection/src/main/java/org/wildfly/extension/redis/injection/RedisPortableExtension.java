@@ -4,16 +4,19 @@
  */
 package org.wildfly.extension.redis.injection;
 
-import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.spi.AfterBeanDiscovery;
+import jakarta.enterprise.inject.spi.BeforeShutdown;
 import jakarta.enterprise.inject.spi.Extension;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import redis.clients.jedis.JedisPooled;
 
 public class RedisPortableExtension implements Extension {
 
     private final Map<String, RedisClientConfig> configs;
+    private final Map<String, JedisPooled> pools = new ConcurrentHashMap<>();
 
     public RedisPortableExtension(Map<String, RedisClientConfig> configs) {
         this.configs = configs;
@@ -26,10 +29,15 @@ public class RedisPortableExtension implements Extension {
             abd.addBean()
                     .types(JedisPooled.class)
                     .qualifiers(new RedisConnectionLiteral(name))
-                    .scope(ApplicationScoped.class)
+                    .scope(Dependent.class)
                     .name(name)
-                    .produceWith(instance -> config.createJedisPooled())
-                    .disposeWith((jedis, instance) -> jedis.close());
+                    .produceWith(instance -> pools.computeIfAbsent(name, k -> config.createJedisPooled()))
+                    .disposeWith((jedis, instance) -> { });
         }
+    }
+
+    void beforeShutdown(@Observes BeforeShutdown event) {
+        pools.values().forEach(JedisPooled::close);
+        pools.clear();
     }
 }
