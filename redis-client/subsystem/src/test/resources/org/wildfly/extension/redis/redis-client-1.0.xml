@@ -1,0 +1,10 @@
+<subsystem xmlns="urn:jboss:domain:redis-client:1.0">
+    <redis-connection name="default"
+        redis-host="localhost"
+        port="6379"
+        database="0"
+        ssl="false"
+        connection-timeout="2000"
+        max-pool-size="8"
+        min-idle="0"/>
+</subsystem>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright The WildFly Authors
+  ~ SPDX-License-Identifier: Apache-2.0
+  -->
+<module xmlns="urn:jboss:module:1.9" name="redis.clients.jedis">
+    <resources>
+        <artifact name="${redis.clients:jedis}"/>
+        <artifact name="${org.apache.commons:commons-pool2}"/>
+    </resources>
+    <dependencies>
+        <module name="org.slf4j"/>
+        <module name="com.google.code.gson" optional="true"/>
+    </dependencies>
+</module>
