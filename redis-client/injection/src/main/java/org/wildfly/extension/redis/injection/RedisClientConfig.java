@@ -4,11 +4,15 @@
  */
 package org.wildfly.extension.redis.injection;
 
+import java.util.HashSet;
+import java.util.Set;
+
 import redis.clients.jedis.ConnectionPoolConfig;
-import redis.clients.jedis.HostAndPort;
-import redis.clients.jedis.JedisClientConfig;
 import redis.clients.jedis.DefaultJedisClientConfig;
+import redis.clients.jedis.HostAndPort;
+import redis.clients.jedis.JedisCluster;
 import redis.clients.jedis.JedisPooled;
+import redis.clients.jedis.UnifiedJedis;
 
 public class RedisClientConfig {
 
@@ -20,6 +24,7 @@ public class RedisClientConfig {
     private int connectionTimeout = 2000;
     private int maxPoolSize = 8;
     private int minIdle = 0;
+    private Set<HostAndPort> clusterNodes = new HashSet<>();
 
     public RedisClientConfig host(String host) {
         this.host = host;
@@ -61,6 +66,22 @@ public class RedisClientConfig {
         return this;
     }
 
+    public RedisClientConfig clusterNodes(Set<HostAndPort> clusterNodes) {
+        this.clusterNodes = clusterNodes;
+        return this;
+    }
+
+    public boolean isClusterMode() {
+        return clusterNodes != null && !clusterNodes.isEmpty();
+    }
+
+    public UnifiedJedis createUnifiedJedis() {
+        if (isClusterMode()) {
+            return createJedisCluster();
+        }
+        return createJedisPooled();
+    }
+
     public JedisPooled createJedisPooled() {
         ConnectionPoolConfig poolConfig = new ConnectionPoolConfig();
         poolConfig.setMaxTotal(maxPoolSize);
@@ -76,6 +97,22 @@ public class RedisClientConfig {
         }
 
         return new JedisPooled(poolConfig, new HostAndPort(host, port), clientConfigBuilder.build());
+    }
+
+    private JedisCluster createJedisCluster() {
+        ConnectionPoolConfig poolConfig = new ConnectionPoolConfig();
+        poolConfig.setMaxTotal(maxPoolSize);
+        poolConfig.setMinIdle(minIdle);
+
+        DefaultJedisClientConfig.Builder clientConfigBuilder = DefaultJedisClientConfig.builder()
+                .connectionTimeoutMillis(connectionTimeout)
+                .ssl(ssl);
+
+        if (password != null && !password.isEmpty()) {
+            clientConfigBuilder.password(password);
+        }
+
+        return new JedisCluster(clusterNodes, clientConfigBuilder.build(), maxPoolSize, poolConfig);
     }
 
     public String getHost() {

@@ -75,8 +75,12 @@ public class RedisConnectionProviderRegistrar implements ChildResourceDefinition
             .setValidator(new IntRangeValidator(0, Integer.MAX_VALUE, true, true))
             .build();
 
+    public static final SimpleAttributeDefinition CLUSTER_NODES = new SimpleAttributeDefinitionBuilder("cluster-nodes", ModelType.STRING, true)
+            .setAllowExpression(true)
+            .build();
+
     public static final Collection<AttributeDefinition> ATTRIBUTES = List.of(
-            HOST, PORT, PASSWORD, DATABASE, SSL, CONNECTION_TIMEOUT, MAX_POOL_SIZE, MIN_IDLE);
+            HOST, PORT, PASSWORD, DATABASE, SSL, CONNECTION_TIMEOUT, MAX_POOL_SIZE, MIN_IDLE, CLUSTER_NODES);
 
     private final ResourceDescriptor descriptor;
     static final String NAME = "redis-connection";

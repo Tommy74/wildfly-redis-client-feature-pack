@@ -14,7 +14,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.wildfly.extension.redis.injection.RedisConnection;
-import redis.clients.jedis.JedisPooled;
+import redis.clients.jedis.UnifiedJedis;
 
 @Path("/redis")
 @ApplicationScoped
@@ -22,7 +22,7 @@ public class RedisResource {
 
     @Inject
     @RedisConnection("default")
-    private JedisPooled jedis;
+    private UnifiedJedis jedis;
 
     @GET
     @Path("/set/{key}/{value}")
