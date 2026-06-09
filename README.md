@@ -23,6 +23,8 @@ cd redis-client-feature-pack
 mvn clean install -DskipTests -Denforcer.skip
 ```
 
+> NOTE: use `mvn clean install -T 1.5C -ntp -DskipTests -Denforcer.skip -Daether.dependencyCollector.impl=bf -Dmaven.artifact.threads=20` to speed up the build
+
 ### Alternative: use the included example application
 
 If you want to skip the manual setup (steps 3–6 below), you can use the `redis-client-example` module that ships with this project. It is a ready-to-run JAX-RS application with Redis `set`, `get`, and `delete` endpoints already wired up:
@@ -45,6 +47,10 @@ mvn clean wildfly:provision wildfly:dev
 ```
 
 The application starts at `http://localhost:8080/redis-example/api/redis`. You can use it as-is to experiment with the subsystem, or copy it as a starting point for your own application.
+
+For example, you can try adding some entry into Redis and then reading it back:
+1. http://localhost:8080/redis-example/api/redis/set/some-entry/some-value
+2. http://localhost:8080/redis-example/api/redis/get/some-entry : should return "some-value"
 
 ### 3. Provision a WildFly server with Redis support
 
@@ -127,14 +133,14 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import org.wildfly.extension.redis.injection.RedisConnection;
-import redis.clients.jedis.JedisPooled;
+import redis.clients.jedis.UnifiedJedis;
 
 @WebServlet("/redis")
 public class RedisServlet extends HttpServlet {
 
     @Inject
     @RedisConnection("default")
-    private JedisPooled jedis;
+    private UnifiedJedis jedis;
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp)
@@ -199,6 +205,7 @@ Each `<redis-connection>` element supports the following attributes:
 | `connection-timeout` | int | `2000` | Connection timeout in milliseconds |
 | `max-pool-size` | int | `8` | Maximum connections in the pool |
 | `min-idle` | int | `0` | Minimum idle connections |
+| `cluster-nodes` | string | (none) | Comma-separated `host:port` pairs for Redis Cluster bootstrap nodes |
 
 All attributes support WildFly expressions, so you can use system properties or environment variables:
 
@@ -207,6 +214,63 @@ All attributes support WildFly expressions, so you can use system properties or 
     redis-host="${env.REDIS_HOST:localhost}"
     port="${env.REDIS_PORT:6379}"
     password="${env.REDIS_PASSWORD}"/>
+```
+
+## Connecting to a Redis Cluster
+
+To connect to a Redis Cluster instead of a standalone Redis instance, use the `cluster-nodes` attribute with a comma-separated list of bootstrap nodes. When `cluster-nodes` is set, the subsystem creates a `JedisCluster` client instead of `JedisPooled`; both are injected as `UnifiedJedis`, so your application code works the same way regardless of the mode.
+
+```xml
+<subsystem xmlns="urn:jboss:domain:redis-client:1.0">
+    <redis-connection name="default"
+        cluster-nodes="redis1:7000,redis2:7001,redis3:7002"
+        max-pool-size="8"/>
+</subsystem>
+```
+
+Or via the WildFly CLI:
+
+```
+/subsystem=redis-client/redis-connection=default:add(cluster-nodes="127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002")
+```
+
+> **Note:** When `cluster-nodes` is set, the `redis-host`, `port`, and `database` attributes are ignored — Jedis discovers the full cluster topology from the bootstrap nodes. The `database` attribute is not supported in cluster mode (Redis Cluster always uses database 0).
+
+### Running a Redis Cluster locally with Podman
+
+A Redis Cluster requires a minimum of 3 master nodes. You can spin one up on your laptop using Podman with host networking so that all nodes share `127.0.0.1` and can discover each other:
+
+```bash
+# Start 3 Redis nodes on the host network
+for port in 7000 7001 7002; do
+  podman run -d --rm --name "redis-${port}" --network host \
+    redis:7-alpine \
+    redis-server \
+      --port "${port}" \
+      --cluster-enabled yes \
+      --cluster-config-file "nodes-${port}.conf" \
+      --cluster-node-timeout 5000 \
+      --appendonly yes
+done
+
+# Form the cluster
+podman exec -it redis-7000 \
+  redis-cli --cluster create \
+    127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002 \
+    --cluster-replicas 0 --cluster-yes
+```
+
+Then configure the subsystem to connect to it:
+
+```
+/subsystem=redis-client/redis-connection=default:remove
+/subsystem=redis-client/redis-connection=default:add(cluster-nodes="127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002")
+```
+
+To tear it all down:
+
+```bash
+podman rm -f redis-7000 redis-7001 redis-7002
 ```
 
 ## Running the Example Application

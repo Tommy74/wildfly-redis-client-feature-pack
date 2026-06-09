@@ -11,12 +11,12 @@ import jakarta.enterprise.inject.spi.BeforeShutdown;
 import jakarta.enterprise.inject.spi.Extension;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import redis.clients.jedis.JedisPooled;
+import redis.clients.jedis.UnifiedJedis;
 
 public class RedisPortableExtension implements Extension {
 
     private final Map<String, RedisClientConfig> configs;
-    private final Map<String, JedisPooled> pools = new ConcurrentHashMap<>();
+    private final Map<String, UnifiedJedis> pools = new ConcurrentHashMap<>();
 
     public RedisPortableExtension(Map<String, RedisClientConfig> configs) {
         this.configs = configs;
@@ -27,17 +27,17 @@ public class RedisPortableExtension implements Extension {
             String name = entry.getKey();
             RedisClientConfig config = entry.getValue();
             abd.addBean()
-                    .types(JedisPooled.class)
+                    .types(UnifiedJedis.class)
                     .qualifiers(new RedisConnectionLiteral(name))
                     .scope(Dependent.class)
                     .name(name)
-                    .produceWith(instance -> pools.computeIfAbsent(name, k -> config.createJedisPooled()))
+                    .produceWith(instance -> pools.computeIfAbsent(name, k -> config.createUnifiedJedis()))
                     .disposeWith((jedis, instance) -> { });
         }
     }
 
     void beforeShutdown(@Observes BeforeShutdown event) {
-        pools.values().forEach(JedisPooled::close);
+        pools.values().forEach(UnifiedJedis::close);
         pools.clear();
     }
 }
