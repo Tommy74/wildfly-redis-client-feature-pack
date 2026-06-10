@@ -16,33 +16,15 @@ import redis.clients.jedis.UnifiedJedis;
 
 public class RedisClientConfig {
 
-    private String host = "localhost";
-    private int port = 6379;
     private String password;
-    private int database = 0;
     private boolean ssl = false;
     private int connectionTimeout = 2000;
     private int maxPoolSize = 8;
     private int minIdle = 0;
     private Set<HostAndPort> clusterNodes = new HashSet<>();
 
-    public RedisClientConfig host(String host) {
-        this.host = host;
-        return this;
-    }
-
-    public RedisClientConfig port(int port) {
-        this.port = port;
-        return this;
-    }
-
     public RedisClientConfig password(String password) {
         this.password = password;
-        return this;
-    }
-
-    public RedisClientConfig database(int database) {
-        this.database = database;
         return this;
     }
 
@@ -72,7 +54,7 @@ public class RedisClientConfig {
     }
 
     public boolean isClusterMode() {
-        return clusterNodes != null && !clusterNodes.isEmpty();
+        return clusterNodes != null && clusterNodes.size() > 1;
     }
 
     public UnifiedJedis createUnifiedJedis() {
@@ -82,21 +64,21 @@ public class RedisClientConfig {
         return createJedisPooled();
     }
 
-    public JedisPooled createJedisPooled() {
+    private JedisPooled createJedisPooled() {
         ConnectionPoolConfig poolConfig = new ConnectionPoolConfig();
         poolConfig.setMaxTotal(maxPoolSize);
         poolConfig.setMinIdle(minIdle);
 
         DefaultJedisClientConfig.Builder clientConfigBuilder = DefaultJedisClientConfig.builder()
                 .connectionTimeoutMillis(connectionTimeout)
-                .database(database)
                 .ssl(ssl);
 
         if (password != null && !password.isEmpty()) {
             clientConfigBuilder.password(password);
         }
 
-        return new JedisPooled(poolConfig, new HostAndPort(host, port), clientConfigBuilder.build());
+        HostAndPort hostAndPort = clusterNodes.iterator().next();
+        return new JedisPooled(poolConfig, hostAndPort, clientConfigBuilder.build());
     }
 
     private JedisCluster createJedisCluster() {
@@ -113,13 +95,5 @@ public class RedisClientConfig {
         }
 
         return new JedisCluster(clusterNodes, clientConfigBuilder.build(), maxPoolSize, poolConfig);
-    }
-
-    public String getHost() {
-        return host;
-    }
-
-    public int getPort() {
-        return port;
     }
 }

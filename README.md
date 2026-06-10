@@ -89,17 +89,14 @@ After provisioning, the `redis-client` subsystem appears in `standalone.xml`. Ad
 ```xml
 <subsystem xmlns="urn:jboss:domain:redis-client:1.0">
     <redis-connection name="default"
-        redis-host="localhost"
-        port="6379"
-        database="0"
-        max-pool-size="8"/>
+        cluster-nodes="${redis.cluster.nodes:127.0.0.1:6379}"/>
 </subsystem>
 ```
 
 You can also configure it via the WildFly CLI:
 
 ```
-/subsystem=redis-client/redis-connection=default:add(redis-host=localhost, port=6379)
+/subsystem=redis-client/redis-connection=default:add(cluster-nodes="${redis.cluster.nodes:127.0.0.1:6379}")
 ```
 
 ### 5. Add the injection dependency to your application
@@ -194,31 +191,29 @@ curl "http://localhost:8080/your-app/redis?action=del&key=greeting"
 
 Each `<redis-connection>` element supports the following attributes:
 
-| Attribute | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `name` | string | (required) | Connection name, used with `@RedisConnection("name")` |
-| `redis-host` | string | `localhost` | Redis server hostname or IP |
-| `port` | int | `6379` | Redis server port |
-| `password` | string | (none) | Authentication password |
-| `database` | int | `0` | Redis database index (0-15) |
-| `ssl` | boolean | `false` | Enable SSL/TLS |
-| `connection-timeout` | int | `2000` | Connection timeout in milliseconds |
-| `max-pool-size` | int | `8` | Maximum connections in the pool |
-| `min-idle` | int | `0` | Minimum idle connections |
-| `cluster-nodes` | string | (none) | Comma-separated `host:port` pairs for Redis Cluster bootstrap nodes |
+| Attribute            | Type    | Default    | Description                                                          |
+|----------------------|---------|------------|----------------------------------------------------------------------|
+| `name`               | string  | (required) | Connection name, used with `@RedisConnection("name")`               |
+| `cluster-nodes`      | string  | (required) | Comma-separated `host:port` pairs (single node or cluster)           |
+| `password`           | string  | (none)     | Authentication password                                              |
+| `ssl`                | boolean | `false`    | Enable SSL/TLS                                                       |
+| `connection-timeout` | int     | `2000`     | Connection timeout in milliseconds                                   |
+| `max-pool-size`      | int     | `8`        | Maximum connections in the pool                                      |
+| `min-idle`           | int     | `0`        | Minimum idle connections                                             |
 
 All attributes support WildFly expressions, so you can use system properties or environment variables:
 
 ```xml
 <redis-connection name="default"
-    redis-host="${env.REDIS_HOST:localhost}"
-    port="${env.REDIS_PORT:6379}"
+    cluster-nodes="${redis.cluster.nodes:127.0.0.1:6379}"
     password="${env.REDIS_PASSWORD}"/>
 ```
 
+The `cluster-nodes` attribute is used for both single-node and cluster deployments. When a single `host:port` is provided, the subsystem creates a `JedisPooled` client; when multiple comma-separated `host:port` pairs are provided, it creates a `JedisCluster` client. Both are injected as `UnifiedJedis`, so your application code works the same way regardless of the mode.
+
 ## Connecting to a Redis Cluster
 
-To connect to a Redis Cluster instead of a standalone Redis instance, use the `cluster-nodes` attribute with a comma-separated list of bootstrap nodes. When `cluster-nodes` is set, the subsystem creates a `JedisCluster` client instead of `JedisPooled`; both are injected as `UnifiedJedis`, so your application code works the same way regardless of the mode.
+To connect to a Redis Cluster, provide multiple bootstrap nodes in `cluster-nodes`:
 
 ```xml
 <subsystem xmlns="urn:jboss:domain:redis-client:1.0">
@@ -233,8 +228,6 @@ Or via the WildFly CLI:
 ```
 /subsystem=redis-client/redis-connection=default:add(cluster-nodes="127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002")
 ```
-
-> **Note:** When `cluster-nodes` is set, the `redis-host`, `port`, and `database` attributes are ignored — Jedis discovers the full cluster topology from the bootstrap nodes. The `database` attribute is not supported in cluster mode (Redis Cluster always uses database 0).
 
 ### Running a Redis Cluster locally with Podman
 
@@ -260,11 +253,10 @@ podman exec -it redis-7000 \
     --cluster-replicas 0 --cluster-yes
 ```
 
-Then configure the subsystem to connect to it:
+Then configure the subsystem to connect to it by setting the system property:
 
-```
-/subsystem=redis-client/redis-connection=default:remove
-/subsystem=redis-client/redis-connection=default:add(cluster-nodes="127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002")
+```bash
+-Dredis.cluster.nodes=127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002
 ```
 
 To tear it all down:

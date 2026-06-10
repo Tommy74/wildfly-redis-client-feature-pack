@@ -16,10 +16,8 @@
 
     <xs:complexType name="redisConnectionType">
         <xs:attribute name="name" type="xs:string" use="required"/>
-        <xs:attribute name="redis-host" type="xs:string" default="localhost"/>
-        <xs:attribute name="port" type="xs:int" default="6379"/>
+        <xs:attribute name="cluster-nodes" type="xs:string" use="required"/>
         <xs:attribute name="password" type="xs:string"/>
-        <xs:attribute name="database" type="xs:int" default="0"/>
         <xs:attribute name="ssl" type="xs:boolean" default="false"/>
         <xs:attribute name="connection-timeout" type="xs:int" default="2000"/>
         <xs:attribute name="max-pool-size" type="xs:int" default="8"/>

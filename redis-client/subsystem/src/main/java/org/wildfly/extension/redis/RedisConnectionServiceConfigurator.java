@@ -31,34 +31,26 @@ public class RedisConnectionServiceConfigurator implements ResourceServiceConfig
 
     @Override
     public ResourceServiceInstaller configure(OperationContext context, ModelNode model) throws OperationFailedException {
-        String host = HOST.resolveModelAttribute(context, model).asString();
-        int port = PORT.resolveModelAttribute(context, model).asInt();
+        String clusterNodesValue = CLUSTER_NODES.resolveModelAttribute(context, model).asString();
         String password = PASSWORD.resolveModelAttribute(context, model).asStringOrNull();
-        int database = DATABASE.resolveModelAttribute(context, model).asInt();
         boolean ssl = SSL.resolveModelAttribute(context, model).asBoolean();
         int connectionTimeout = CONNECTION_TIMEOUT.resolveModelAttribute(context, model).asInt();
         int maxPoolSize = MAX_POOL_SIZE.resolveModelAttribute(context, model).asInt();
         int minIdle = MIN_IDLE.resolveModelAttribute(context, model).asInt();
-        String clusterNodesValue = CLUSTER_NODES.resolveModelAttribute(context, model).asStringOrNull();
 
         Set<HostAndPort> clusterNodes = new HashSet<>();
-        if (clusterNodesValue != null && !clusterNodesValue.isBlank()) {
-            for (String node : clusterNodesValue.split(",")) {
-                String trimmed = node.trim();
-                int lastColon = trimmed.lastIndexOf(':');
-                if (lastColon > 0) {
-                    String nodeHost = trimmed.substring(0, lastColon);
-                    int nodePort = Integer.parseInt(trimmed.substring(lastColon + 1));
-                    clusterNodes.add(new HostAndPort(nodeHost, nodePort));
-                }
+        for (String node : clusterNodesValue.split(",")) {
+            String trimmed = node.trim();
+            int lastColon = trimmed.lastIndexOf(':');
+            if (lastColon > 0) {
+                String nodeHost = trimmed.substring(0, lastColon);
+                int nodePort = Integer.parseInt(trimmed.substring(lastColon + 1));
+                clusterNodes.add(new HostAndPort(nodeHost, nodePort));
             }
         }
 
         Supplier<RedisClientConfig> factory = () -> new RedisClientConfig()
-                .host(host)
-                .port(port)
                 .password(password)
-                .database(database)
                 .ssl(ssl)
                 .connectionTimeout(connectionTimeout)
                 .maxPoolSize(maxPoolSize)
