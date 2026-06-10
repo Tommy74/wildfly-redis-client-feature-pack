@@ -291,6 +291,28 @@ curl http://localhost:8080/redis-example/api/redis/get/mykey
 # myvalue
 ```
 
+## Running the Integration Tests
+
+The test suite uses [Testcontainers](https://testcontainers.com/) to start Redis containers automatically. On Fedora/RHEL with Podman, enable the Podman socket and configure the environment before running the tests:
+
+```bash
+systemctl --user start podman.socket
+export DOCKER_HOST=unix:///run/user/$UID/podman/podman.sock
+export TESTCONTAINERS_RYUK_DISABLED=true
+```
+
+Then run:
+
+```bash
+mvn clean install -Denforcer.skip
+```
+
+The test suite includes:
+
+- **Single-node test** (`RedisSingleNodeIT`): Verifies `RedisClientConfig` creates a `JedisPooled` client against a single Redis container
+- **Cluster test** (`RedisClusterIT`): Verifies `RedisClientConfig` creates a `JedisCluster` client against a 3-node Redis Cluster (Linux only)
+- **WildFly integration test** (`RedisSubsystemIT`): Verifies CDI injection of `UnifiedJedis` in a provisioned WildFly server
+
 ## Project Structure
 
 ```

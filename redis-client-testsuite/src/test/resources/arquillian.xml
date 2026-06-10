@@ -6,7 +6,7 @@
     <container qualifier="wildfly-managed" default="true">
         <configuration>
             <property name="jbossHome">${jboss.home}</property>
-            <property name="javaVmArguments">-Xmx512m -Djboss.socket.binding.port-offset=0</property>
+            <property name="javaVmArguments">-Xmx512m -Djboss.socket.binding.port-offset=0 -Dredis.cluster.nodes=${redis.cluster.nodes:127.0.0.1:6379}</property>
         </configuration>
     </container>
 </arquillian>
