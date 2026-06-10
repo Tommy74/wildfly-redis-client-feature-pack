@@ -1,6 +1,7 @@
 # Redis Client Feature Pack for WildFly
 
-A WildFly Galleon feature pack that provides Redis client support via [Jedis](https://github.com/redis/jedis). It adds a `redis-client` subsystem to WildFly that manages Redis connection pools and makes them injectable into your Jakarta EE applications via CDI.
+A WildFly Galleon feature pack that provides Redis client support via [Jedis](https://github.com/redis/jedis). 
+It adds a `redis-client` subsystem to WildFly that manages Redis connection pools and makes them injectable into your Jakarta EE applications via CDI.
 
 ## Prerequisites
 
