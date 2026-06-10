@@ -47,6 +47,11 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>com.redis</groupId>
+            <artifactId>testcontainers-redis</artifactId>
+            <scope>test</scope>
+        </dependency>
 
         <!-- Application dependencies (provided at runtime by server) -->
         <dependency>
@@ -94,9 +99,10 @@
                         <id>provision-server</id>
                         <phase>process-test-classes</phase>
                         <goals>
-                            <goal>provision</goal>
+                            <goal>package</goal>
                         </goals>
                         <configuration>
+                            <skipDeployment>true</skipDeployment>
                             <provisioning-dir>${jboss.home}</provisioning-dir>
                             <feature-packs>
                                 <feature-pack>
@@ -117,6 +123,13 @@
                             <galleon-options>
                                 <jboss-fork-embedded>true</jboss-fork-embedded>
                             </galleon-options>
+                            <packagingScripts>
+                                <packaging-script>
+                                    <commands>
+                                        <command>/subsystem=redis-client/redis-connection=default:add(cluster-nodes=${redis.cluster.nodes:127.0.0.1:6379})</command>
+                                    </commands>
+                                </packaging-script>
+                            </packagingScripts>
                         </configuration>
                     </execution>
                 </executions>
