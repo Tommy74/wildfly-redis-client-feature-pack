@@ -30,26 +30,13 @@ import org.wildfly.subsystem.resource.operation.ResourceOperationRuntimeHandler;
 
 public class RedisConnectionProviderRegistrar implements ChildResourceDefinitionRegistrar {
 
-    public static final SimpleAttributeDefinition HOST = new SimpleAttributeDefinitionBuilder("redis-host", ModelType.STRING, true)
+    public static final SimpleAttributeDefinition CLUSTER_NODES = new SimpleAttributeDefinitionBuilder("cluster-nodes", ModelType.STRING, false)
             .setAllowExpression(true)
-            .setDefaultValue(new ModelNode("localhost"))
-            .build();
-
-    public static final SimpleAttributeDefinition PORT = new SimpleAttributeDefinitionBuilder("port", ModelType.INT, true)
-            .setAllowExpression(true)
-            .setDefaultValue(new ModelNode(6379))
-            .setValidator(new IntRangeValidator(1, 65535, true, true))
             .build();
 
     public static final SimpleAttributeDefinition PASSWORD = new SimpleAttributeDefinitionBuilder("password", ModelType.STRING, true)
             .setAllowExpression(true)
             .addAccessConstraint(SensitiveTargetAccessConstraintDefinition.CREDENTIAL)
-            .build();
-
-    public static final SimpleAttributeDefinition DATABASE = new SimpleAttributeDefinitionBuilder("database", ModelType.INT, true)
-            .setAllowExpression(true)
-            .setDefaultValue(new ModelNode(0))
-            .setValidator(new IntRangeValidator(0, 15, true, true))
             .build();
 
     public static final SimpleAttributeDefinition SSL = SimpleAttributeDefinitionBuilder
@@ -75,12 +62,8 @@ public class RedisConnectionProviderRegistrar implements ChildResourceDefinition
             .setValidator(new IntRangeValidator(0, Integer.MAX_VALUE, true, true))
             .build();
 
-    public static final SimpleAttributeDefinition CLUSTER_NODES = new SimpleAttributeDefinitionBuilder("cluster-nodes", ModelType.STRING, true)
-            .setAllowExpression(true)
-            .build();
-
     public static final Collection<AttributeDefinition> ATTRIBUTES = List.of(
-            HOST, PORT, PASSWORD, DATABASE, SSL, CONNECTION_TIMEOUT, MAX_POOL_SIZE, MIN_IDLE, CLUSTER_NODES);
+            CLUSTER_NODES, PASSWORD, SSL, CONNECTION_TIMEOUT, MAX_POOL_SIZE, MIN_IDLE);
 
     private final ResourceDescriptor descriptor;
     static final String NAME = "redis-connection";
