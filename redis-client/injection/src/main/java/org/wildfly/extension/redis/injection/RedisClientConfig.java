@@ -7,6 +7,8 @@ package org.wildfly.extension.redis.injection;
 import java.util.HashSet;
 import java.util.Set;
 
+import javax.net.ssl.SSLSocketFactory;
+
 import redis.clients.jedis.ConnectionPoolConfig;
 import redis.clients.jedis.DefaultJedisClientConfig;
 import redis.clients.jedis.HostAndPort;
@@ -18,6 +20,7 @@ public class RedisClientConfig {
 
     private String password;
     private boolean ssl = false;
+    private SSLSocketFactory sslSocketFactory;
     private int connectionTimeout = 2000;
     private int maxPoolSize = 8;
     private int minIdle = 0;
@@ -30,6 +33,11 @@ public class RedisClientConfig {
 
     public RedisClientConfig ssl(boolean ssl) {
         this.ssl = ssl;
+        return this;
+    }
+
+    public RedisClientConfig sslSocketFactory(SSLSocketFactory sslSocketFactory) {
+        this.sslSocketFactory = sslSocketFactory;
         return this;
     }
 
@@ -69,16 +77,8 @@ public class RedisClientConfig {
         poolConfig.setMaxTotal(maxPoolSize);
         poolConfig.setMinIdle(minIdle);
 
-        DefaultJedisClientConfig.Builder clientConfigBuilder = DefaultJedisClientConfig.builder()
-                .connectionTimeoutMillis(connectionTimeout)
-                .ssl(ssl);
-
-        if (password != null && !password.isEmpty()) {
-            clientConfigBuilder.password(password);
-        }
-
         HostAndPort hostAndPort = clusterNodes.iterator().next();
-        return new JedisPooled(poolConfig, hostAndPort, clientConfigBuilder.build());
+        return new JedisPooled(poolConfig, hostAndPort, buildClientConfig());
     }
 
     private JedisCluster createJedisCluster() {
@@ -86,14 +86,21 @@ public class RedisClientConfig {
         poolConfig.setMaxTotal(maxPoolSize);
         poolConfig.setMinIdle(minIdle);
 
-        DefaultJedisClientConfig.Builder clientConfigBuilder = DefaultJedisClientConfig.builder()
+        return new JedisCluster(clusterNodes, buildClientConfig(), maxPoolSize, poolConfig);
+    }
+
+    private DefaultJedisClientConfig buildClientConfig() {
+        DefaultJedisClientConfig.Builder builder = DefaultJedisClientConfig.builder()
                 .connectionTimeoutMillis(connectionTimeout)
                 .ssl(ssl);
 
         if (password != null && !password.isEmpty()) {
-            clientConfigBuilder.password(password);
+            builder.password(password);
+        }
+        if (sslSocketFactory != null) {
+            builder.sslSocketFactory(sslSocketFactory);
         }
 
-        return new JedisCluster(clusterNodes, clientConfigBuilder.build(), maxPoolSize, poolConfig);
+        return builder.build();
     }
 }

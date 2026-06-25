@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright The WildFly Authors
+  ~ SPDX-License-Identifier: Apache-2.0
+  -->
+<feature-group-spec name="redis-client-ssl" xmlns="urn:jboss:galleon:feature-group:1.0">
+    <feature spec="subsystem.elytron">
+
+        <!-- Truststore key-store -->
+        <feature spec="subsystem.elytron.key-store">
+            <param name="key-store" value="redis-truststore"/>
+            <param name="credential-reference" value="{clear-text=${env.REDIS_TRUST_STORE_PASSWORD:changeit}}"/>
+            <param name="path" value="${env.REDIS_TRUST_STORE_PATH:redis-truststore.p12}"/>
+            <param name="required" value="false"/>
+            <param name="type" value="${env.REDIS_TRUST_STORE_TYPE:PKCS12}"/>
+        </feature>
+
+        <!-- Trust-manager referencing the truststore -->
+        <feature spec="subsystem.elytron.trust-manager">
+            <param name="trust-manager" value="redis-trust-manager"/>
+            <param name="key-store" value="redis-truststore"/>
+        </feature>
+
+        <!-- Client SSL context referencing the trust-manager -->
+        <feature spec="subsystem.elytron.client-ssl-context">
+            <param name="client-ssl-context" value="redis-ssl-context"/>
+            <param name="trust-manager" value="redis-trust-manager"/>
+        </feature>
+
+    </feature>
+</feature-group-spec>

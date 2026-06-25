@@ -8,6 +8,7 @@ import static org.wildfly.extension.redis.RedisCapabilities.REDIS_CLIENT_PROVIDE
 
 import java.util.Collection;
 import java.util.List;
+import javax.net.ssl.SSLContext;
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.ResourceDefinition;
@@ -18,21 +19,37 @@ import org.jboss.as.controller.access.management.SensitiveTargetAccessConstraint
 import org.jboss.as.controller.descriptions.ParentResourceDescriptionResolver;
 import org.jboss.as.controller.operations.validation.IntRangeValidator;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
+import org.jboss.as.network.OutboundSocketBinding;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
 import org.wildfly.extension.redis.injection.RedisClientConfig;
 import org.wildfly.service.capture.ValueExecutorRegistry;
+import org.wildfly.service.descriptor.UnaryServiceDescriptor;
 import org.wildfly.subsystem.resource.ChildResourceDefinitionRegistrar;
 import org.wildfly.subsystem.resource.ManagementResourceRegistrar;
 import org.wildfly.subsystem.resource.ManagementResourceRegistrationContext;
 import org.wildfly.subsystem.resource.ResourceDescriptor;
+import org.wildfly.subsystem.resource.capability.CapabilityReference;
+import org.wildfly.subsystem.resource.capability.CapabilityReferenceAttributeDefinition;
+import org.wildfly.subsystem.resource.capability.CapabilityReferenceListAttributeDefinition;
 import org.wildfly.subsystem.resource.operation.ResourceOperationRuntimeHandler;
 
 public class RedisConnectionProviderRegistrar implements ChildResourceDefinitionRegistrar {
 
-    public static final SimpleAttributeDefinition CLUSTER_NODES = new SimpleAttributeDefinitionBuilder("cluster-nodes", ModelType.STRING, false)
+    static final UnaryServiceDescriptor<SSLContext> SSL_CONTEXT_DESCRIPTOR =
+            UnaryServiceDescriptor.of("org.wildfly.security.ssl-context", SSLContext.class);
+
+    public static final SimpleAttributeDefinition CLUSTER_NODES = new SimpleAttributeDefinitionBuilder("cluster-nodes", ModelType.STRING, true)
             .setAllowExpression(true)
+            .setAlternatives("outbound-socket-bindings")
             .build();
+
+    public static final CapabilityReferenceListAttributeDefinition<OutboundSocketBinding> OUTBOUND_SOCKET_BINDINGS =
+            new CapabilityReferenceListAttributeDefinition.Builder<>("outbound-socket-bindings",
+                    CapabilityReference.builder(REDIS_CLIENT_PROVIDER_CAPABILITY, OutboundSocketBinding.SERVICE_DESCRIPTOR).build())
+                    .setRequired(false)
+                    .setAlternatives("cluster-nodes")
+                    .build();
 
     public static final SimpleAttributeDefinition PASSWORD = new SimpleAttributeDefinitionBuilder("password", ModelType.STRING, true)
             .setAllowExpression(true)
@@ -44,6 +61,13 @@ public class RedisConnectionProviderRegistrar implements ChildResourceDefinition
             .setAllowExpression(true)
             .setDefaultValue(ModelNode.FALSE)
             .build();
+
+    public static final CapabilityReferenceAttributeDefinition<SSLContext> SSL_CONTEXT =
+            new CapabilityReferenceAttributeDefinition.Builder<>("ssl-context",
+                    CapabilityReference.builder(REDIS_CLIENT_PROVIDER_CAPABILITY, SSL_CONTEXT_DESCRIPTOR).build())
+                    .setRequired(false)
+                    .addAccessConstraint(SensitiveTargetAccessConstraintDefinition.SSL_REF)
+                    .build();
 
     public static final SimpleAttributeDefinition CONNECTION_TIMEOUT = new SimpleAttributeDefinitionBuilder("connection-timeout", ModelType.INT, true)
             .setAllowExpression(true)
@@ -62,8 +86,15 @@ public class RedisConnectionProviderRegistrar implements ChildResourceDefinition
             .setValidator(new IntRangeValidator(0, Integer.MAX_VALUE, true, true))
             .build();
 
-    public static final Collection<AttributeDefinition> ATTRIBUTES = List.of(
+    static final Collection<AttributeDefinition> ATTRIBUTES_V1_0 = List.of(
             CLUSTER_NODES, PASSWORD, SSL, CONNECTION_TIMEOUT, MAX_POOL_SIZE, MIN_IDLE);
+
+    static final Collection<AttributeDefinition> ATTRIBUTES_V1_1 = List.of(
+            OUTBOUND_SOCKET_BINDINGS, SSL_CONTEXT);
+
+    public static final Collection<AttributeDefinition> ATTRIBUTES = List.of(
+            CLUSTER_NODES, OUTBOUND_SOCKET_BINDINGS, PASSWORD, SSL, SSL_CONTEXT,
+            CONNECTION_TIMEOUT, MAX_POOL_SIZE, MIN_IDLE);
 
     private final ResourceDescriptor descriptor;
     static final String NAME = "redis-connection";

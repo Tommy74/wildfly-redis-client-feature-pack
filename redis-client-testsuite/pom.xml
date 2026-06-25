@@ -126,7 +126,20 @@
                             <packagingScripts>
                                 <packaging-script>
                                     <commands>
+                                        <!-- Default connection using cluster-nodes -->
                                         <command>/subsystem=redis-client/redis-connection=default:add(cluster-nodes=${redis.cluster.nodes:127.0.0.1:6379})</command>
+                                        <!-- Connection using outbound socket binding -->
+                                        <command>/socket-binding-group=standard-sockets/remote-destination-outbound-socket-binding=redis-test-server:add(host=${redis.socket.host:127.0.0.1},port=${redis.socket.port:6379})</command>
+                                        <command>/subsystem=redis-client/redis-connection=socket-binding-conn:add(outbound-socket-bindings=[redis-test-server])</command>
+                                        <!-- Elytron SSL chain for Redis -->
+                                        <command>/subsystem=elytron/key-store=redis-test-truststore:add(credential-reference={clear-text=changeit},path=${redis.truststore.path:truststore.p12},required=false,type=PKCS12)</command>
+                                        <command>/subsystem=elytron/trust-manager=redis-test-trust-manager:add(key-store=redis-test-truststore)</command>
+                                        <command>/subsystem=elytron/client-ssl-context=redis-test-ssl-context:add(trust-manager=redis-test-trust-manager)</command>
+                                        <!-- Connection using SSL context -->
+                                        <command>/subsystem=redis-client/redis-connection=ssl-conn:add(cluster-nodes=${redis.ssl.nodes:127.0.0.1:6380},ssl-context=redis-test-ssl-context)</command>
+                                        <!-- Connection using both socket binding and SSL context -->
+                                        <command>/socket-binding-group=standard-sockets/remote-destination-outbound-socket-binding=redis-ssl-server:add(host=${redis.ssl.host:127.0.0.1},port=${redis.ssl.port:6380})</command>
+                                        <command>/subsystem=redis-client/redis-connection=ssl-socket-binding-conn:add(outbound-socket-bindings=[redis-ssl-server],ssl-context=redis-test-ssl-context)</command>
                                     </commands>
                                 </packaging-script>
                             </packagingScripts>

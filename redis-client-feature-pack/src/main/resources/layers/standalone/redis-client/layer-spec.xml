@@ -11,7 +11,9 @@
     </props>
     <dependencies>
         <layer name="cdi"/>
+        <layer name="elytron" optional="true"/>
     </dependencies>
     <feature spec="subsystem.redis-client"/>
+    <feature-group name="redis-sockets"/>
 
 </layer-spec>

@@ -192,15 +192,19 @@ curl "http://localhost:8080/your-app/redis?action=del&key=greeting"
 
 Each `<redis-connection>` element supports the following attributes:
 
-| Attribute            | Type    | Default    | Description                                                          |
-|----------------------|---------|------------|----------------------------------------------------------------------|
-| `name`               | string  | (required) | Connection name, used with `@RedisConnection("name")`               |
-| `cluster-nodes`      | string  | (required) | Comma-separated `host:port` pairs (single node or cluster)           |
-| `password`           | string  | (none)     | Authentication password                                              |
-| `ssl`                | boolean | `false`    | Enable SSL/TLS                                                       |
-| `connection-timeout` | int     | `2000`     | Connection timeout in milliseconds                                   |
-| `max-pool-size`      | int     | `8`        | Maximum connections in the pool                                      |
-| `min-idle`           | int     | `0`        | Minimum idle connections                                             |
+| Attribute                  | Type    | Default    | Description                                                                  |
+|----------------------------|---------|------------|------------------------------------------------------------------------------|
+| `name`                     | string  | (required) | Connection name, used with `@RedisConnection("name")`                       |
+| `cluster-nodes`            | string  | (none)     | Comma-separated `host:port` pairs (single node or cluster)                   |
+| `outbound-socket-bindings` | string  | (none)     | Space-separated `remote-destination-outbound-socket-binding` names           |
+| `password`                 | string  | (none)     | Authentication password                                                      |
+| `ssl`                      | boolean | `false`    | Enable SSL/TLS (uses JVM default trust store)                                |
+| `ssl-context`              | string  | (none)     | Reference to an Elytron `client-ssl-context` (implies `ssl=true`)            |
+| `connection-timeout`       | int     | `2000`     | Connection timeout in milliseconds                                           |
+| `max-pool-size`            | int     | `8`        | Maximum connections in the pool                                              |
+| `min-idle`                 | int     | `0`        | Minimum idle connections                                                     |
+
+Either `cluster-nodes` or `outbound-socket-bindings` must be provided (they are mutually exclusive).
 
 All attributes support WildFly expressions, so you can use system properties or environment variables:
 
@@ -266,6 +270,169 @@ To tear it all down:
 podman rm -f redis-7000 redis-7001 redis-7002
 ```
 
+## Using Outbound Socket Bindings
+
+Instead of hardcoding `host:port` values in `cluster-nodes`, you can use WildFly's `remote-destination-outbound-socket-binding` to manage Redis server addresses centrally.
+
+### Single Redis server
+
+Configure the socket binding and reference it from the Redis connection:
+
+```
+/socket-binding-group=standard-sockets/remote-destination-outbound-socket-binding=redis-server:add(host=${env.REDIS_HOST:localhost},port=${env.REDIS_PORT:6379})
+/subsystem=redis-client/redis-connection=default:add(outbound-socket-bindings=[redis-server])
+```
+
+Or in XML:
+
+```xml
+<socket-binding-group name="standard-sockets" ...>
+    <outbound-socket-binding name="redis-server">
+        <remote-destination host="${env.REDIS_HOST:localhost}" port="${env.REDIS_PORT:6379}"/>
+    </outbound-socket-binding>
+</socket-binding-group>
+
+<subsystem xmlns="urn:jboss:domain:redis-client:1.1">
+    <redis-connection name="default" outbound-socket-bindings="redis-server"/>
+</subsystem>
+```
+
+### Multiple Redis servers (cluster)
+
+Define one socket binding per node and reference them all:
+
+```
+/socket-binding-group=standard-sockets/remote-destination-outbound-socket-binding=redis-1:add(host=127.0.0.1,port=7000)
+/socket-binding-group=standard-sockets/remote-destination-outbound-socket-binding=redis-2:add(host=127.0.0.1,port=7001)
+/socket-binding-group=standard-sockets/remote-destination-outbound-socket-binding=redis-3:add(host=127.0.0.1,port=7002)
+/subsystem=redis-client/redis-connection=default:add(outbound-socket-bindings=[redis-1 redis-2 redis-3])
+```
+
+When multiple bindings are provided, the subsystem creates a `JedisCluster` client just like with multiple `cluster-nodes`.
+
+The `redis-client` layer automatically provisions a default socket binding named `redis-server` with host `${redis.host:localhost}` and port `${redis.port:6379}`.
+
+## Connecting to Redis with TLS (Elytron)
+
+For production environments, Redis should be accessed over TLS. The subsystem integrates with WildFly's Elytron security framework to manage SSL/TLS configuration.
+
+### 1. Start Redis with TLS
+
+Generate server certificates and start Redis with TLS enabled:
+
+```bash
+# Generate a CA key and self-signed certificate
+openssl req -x509 -newkey rsa:2048 -keyout ca-key.pem -out ca-cert.pem \
+  -days 365 -nodes -subj '/CN=Redis CA'
+
+# Generate a server key and certificate signed by the CA
+openssl req -newkey rsa:2048 -keyout server-key.pem -out server-req.pem \
+  -nodes -subj '/CN=localhost'
+openssl x509 -req -in server-req.pem -CA ca-cert.pem -CAkey ca-key.pem \
+  -CAcreateserial -out server-cert.pem -days 365 \
+  -extfile <(echo "subjectAltName=DNS:localhost,IP:127.0.0.1")
+rm server-req.pem
+
+# Start Redis with TLS
+podman run --rm -it --name redis-tls -p 6380:6379 \
+  -v ./ca-cert.pem:/tls/ca-cert.pem:ro \
+  -v ./server-cert.pem:/tls/server-cert.pem:ro \
+  -v ./server-key.pem:/tls/server-key.pem:ro \
+  redis:7-alpine \
+  redis-server \
+    --tls-port 6379 --port 0 \
+    --tls-cert-file /tls/server-cert.pem \
+    --tls-key-file /tls/server-key.pem \
+    --tls-ca-cert-file /tls/ca-cert.pem
+```
+
+### 2. Create a truststore for WildFly
+
+Import the CA certificate into a PKCS12 truststore that WildFly's Elytron can use:
+
+```bash
+keytool -importcert -alias redis-ca -file ca-cert.pem \
+  -keystore redis-truststore.p12 -storetype PKCS12 \
+  -storepass changeit -noprompt
+```
+
+Copy `redis-truststore.p12` to your WildFly server's configuration directory.
+
+### 3. Configure Elytron and the Redis connection
+
+Set up the Elytron trust chain and reference it from the Redis subsystem:
+
+```
+# Create a key-store pointing to the truststore
+/subsystem=elytron/key-store=redis-truststore:add( \
+    credential-reference={clear-text=changeit}, \
+    path=redis-truststore.p12, \
+    relative-to=jboss.server.config.dir, \
+    type=PKCS12)
+
+# Create a trust-manager referencing the key-store
+/subsystem=elytron/trust-manager=redis-trust-manager:add( \
+    key-store=redis-truststore)
+
+# Create a client-ssl-context referencing the trust-manager
+/subsystem=elytron/client-ssl-context=redis-ssl-context:add( \
+    trust-manager=redis-trust-manager)
+
+# Configure the Redis connection with the SSL context
+/subsystem=redis-client/redis-connection=default:add( \
+    cluster-nodes=localhost:6380, \
+    ssl-context=redis-ssl-context)
+```
+
+When `ssl-context` is set, SSL/TLS is automatically enabled — you don't need to also set `ssl=true`.
+
+The equivalent XML configuration:
+
+```xml
+<subsystem xmlns="urn:wildfly:elytron:18.0">
+    <tls>
+        <key-stores>
+            <key-store name="redis-truststore">
+                <credential-reference clear-text="changeit"/>
+                <implementation type="PKCS12"/>
+                <file path="redis-truststore.p12" relative-to="jboss.server.config.dir"/>
+            </key-store>
+        </key-stores>
+        <trust-managers>
+            <trust-manager name="redis-trust-manager" key-store="redis-truststore"/>
+        </trust-managers>
+        <client-ssl-contexts>
+            <client-ssl-context name="redis-ssl-context" trust-manager="redis-trust-manager"/>
+        </client-ssl-contexts>
+    </tls>
+</subsystem>
+
+<subsystem xmlns="urn:jboss:domain:redis-client:1.1">
+    <redis-connection name="default"
+        cluster-nodes="localhost:6380"
+        ssl-context="redis-ssl-context"/>
+</subsystem>
+```
+
+### Using both socket bindings and SSL
+
+You can combine outbound socket bindings with an Elytron SSL context for full WildFly-managed configuration:
+
+```
+/socket-binding-group=standard-sockets/remote-destination-outbound-socket-binding=redis-tls:add( \
+    host=${env.REDIS_HOST:localhost}, port=${env.REDIS_PORT:6380})
+/subsystem=redis-client/redis-connection=default:add( \
+    outbound-socket-bindings=[redis-tls], \
+    ssl-context=redis-ssl-context)
+```
+
+### Galleon feature groups
+
+The feature pack ships two optional feature groups that can be used during provisioning:
+
+- **`redis-sockets`** — Creates a default `redis-server` outbound socket binding (included automatically in the `redis-client` layer)
+- **`redis-client-ssl`** — Creates a complete Elytron trust chain (`redis-truststore` key-store, `redis-trust-manager` trust-manager, `redis-ssl-context` client-ssl-context). Configure via environment variables: `REDIS_TRUST_STORE_PASSWORD`, `REDIS_TRUST_STORE_PATH`, `REDIS_TRUST_STORE_TYPE`
+
 ## Running the Example Application
 
 The project includes a ready-to-run example:
@@ -313,6 +480,9 @@ The test suite includes:
 - **Single-node test** (`RedisSingleNodeIT`): Verifies `RedisClientConfig` creates a `JedisPooled` client against a single Redis container
 - **Cluster test** (`RedisClusterIT`): Verifies `RedisClientConfig` creates a `JedisCluster` client against a 3-node Redis Cluster (Linux only)
 - **WildFly integration test** (`RedisSubsystemIT`): Verifies CDI injection of `UnifiedJedis` in a provisioned WildFly server
+- **Socket binding test** (`RedisSocketBindingIT`): Verifies Redis connection via `outbound-socket-bindings`
+- **SSL test** (`RedisSslIT`): Verifies Redis connection over TLS via Elytron `client-ssl-context`
+- **SSL + socket binding test** (`RedisSslSocketBindingIT`): Verifies Redis connection using both socket bindings and Elytron SSL
 
 ## Project Structure
 
