@@ -15,5 +15,6 @@
     <modules>
         <module>injection</module>
         <module>subsystem</module>
+        <module>session</module>
     </modules>
 </project>

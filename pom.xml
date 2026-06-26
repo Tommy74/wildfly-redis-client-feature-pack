@@ -96,6 +96,11 @@
                 <artifactId>redis-client-subsystem</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>${project.groupId}</groupId>
+                <artifactId>redis-client-session</artifactId>
+                <version>${project.version}</version>
+            </dependency>
 
             <!-- Test -->
             <dependency>

@@ -38,6 +38,11 @@
             <artifactId>redis-client-injection</artifactId>
             <scope>provided</scope>
         </dependency>
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -62,13 +67,26 @@
                     <layers>
                         <layer>jaxrs-server</layer>
                         <layer>redis-client</layer>
+                        <layer>redis-web-clustering</layer>
                     </layers>
                     <galleon-options>
                         <jboss-fork-embedded>true</jboss-fork-embedded>
                     </galleon-options>
-                    <commands>
-                        <command>/subsystem=redis-client/redis-connection=default:add(cluster-nodes=${redis.cluster.nodes:127.0.0.1:6379})</command>
-                    </commands>
+                    <packagingScripts>
+                        <packaging-script>
+                            <commands>
+                                <!-- Redis connection -->
+                                <command>/subsystem=redis-client/redis-connection=default:add(cluster-nodes=${redis.cluster.nodes:127.0.0.1:6379})</command>
+                                <!-- Configure distributable-web to use Redis for session management -->
+                                <command>/subsystem=distributable-web/redis-session-management=default:add(redis-connection=default, granularity=SESSION)</command>
+                                <command>/subsystem=distributable-web/redis-session-management=default/affinity=no-affinity:add()</command>
+                                <command>/subsystem=distributable-web:write-attribute(name=default-session-management, value=default)</command>
+                                <!-- Configure distributable-web to use Redis for SSO management -->
+                                <command>/subsystem=distributable-web/redis-single-sign-on-management=default:add(redis-connection=default)</command>
+                                <command>/subsystem=distributable-web:write-attribute(name=default-single-sign-on-management, value=default)</command>
+                            </commands>
+                        </packaging-script>
+                    </packagingScripts>
                 </configuration>
             </plugin>
         </plugins>
