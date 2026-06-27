@@ -29,10 +29,11 @@
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.release>17</maven.compiler.release>
 
-        <version.org.wildfly>40.0.0.Final</version.org.wildfly>
+        <version.org.wildfly>41.0.0.Beta1</version.org.wildfly>
         <version.org.wildfly.core>32.0.0.Final</version.org.wildfly.core>
         <version.org.wildfly.common>1.6.0.Final</version.org.wildfly.common>
         <version.org.wildfly.galleon-plugins>8.1.5.Final</version.org.wildfly.galleon-plugins>
+        <version.org.wildfly.plugin>6.0.0.Final</version.org.wildfly.plugin>
 
         <version.redis.clients.jedis>5.2.0</version.redis.clients.jedis>
 
@@ -145,17 +146,6 @@
                 <enabled>false</enabled>
             </snapshots>
         </repository>
-        <repository>
-            <id>shibboleth</id>
-            <name>Shibboleth Maven Repository</name>
-            <url>https://build.shibboleth.net/maven/releases/</url>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-        </repository>
     </repositories>
 
     <build>
@@ -181,7 +171,7 @@
                 <plugin>
                     <groupId>org.wildfly.plugins</groupId>
                     <artifactId>wildfly-maven-plugin</artifactId>
-                    <version>5.1.1.Final</version>
+                    <version>${version.org.wildfly.plugin}</version>
                 </plugin>
             </plugins>
         </pluginManagement>

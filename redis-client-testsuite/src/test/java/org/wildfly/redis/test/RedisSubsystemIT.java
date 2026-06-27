@@ -47,7 +47,8 @@ public class RedisSubsystemIT {
     public static WebArchive createDeployment() {
         return ShrinkWrap.create(WebArchive.class, "redis-test.war")
                 .addClass(RedisSubsystemIT.class)
-                .addAsWebInfResource(EmptyAsset.INSTANCE, "beans.xml");
+                .addAsWebInfResource(EmptyAsset.INSTANCE, "beans.xml")
+                .addPackages(true, "org.hamcrest");
     }
 
     @Test

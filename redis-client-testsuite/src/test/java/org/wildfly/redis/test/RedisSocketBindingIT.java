@@ -49,7 +49,8 @@ public class RedisSocketBindingIT {
     public static WebArchive createDeployment() {
         return ShrinkWrap.create(WebArchive.class, "redis-socket-binding-test.war")
                 .addClass(RedisSocketBindingIT.class)
-                .addAsWebInfResource(EmptyAsset.INSTANCE, "beans.xml");
+                .addAsWebInfResource(EmptyAsset.INSTANCE, "beans.xml")
+                .addPackages(true, "org.hamcrest");
     }
 
     @Test

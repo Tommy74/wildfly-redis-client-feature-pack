@@ -67,9 +67,15 @@ public class RedisSessionFailoverIT {
     private static Process node2Process;
     private static HttpClient httpClient;
     private static String sessionId;
+    private static Thread shutdownHook;
 
     @BeforeAll
     static void setup() throws Exception {
+        killStaleWildFlyProcesses();
+
+        shutdownHook = new Thread(RedisSessionFailoverIT::teardown, "failover-test-cleanup");
+        Runtime.getRuntime().addShutdownHook(shutdownHook);
+
         redis = new RedisContainer("redis:7-alpine");
         redis.start();
 
@@ -82,10 +88,9 @@ public class RedisSessionFailoverIT {
                         "web.xml")
                 .addAsWebInfResource(new StringAsset(""), "beans.xml");
 
-        Path deployDir1 = Path.of(JBOSS_HOME, "standalone", "deployments");
-        Path deployDir2 = Path.of(JBOSS_HOME, "standalone", "deployments");
-        deployDir1.toFile().mkdirs();
-        File warFile = deployDir1.resolve(APP_NAME + ".war").toFile();
+        Path deployDir = Path.of(JBOSS_HOME, "standalone", "deployments");
+        deployDir.toFile().mkdirs();
+        File warFile = deployDir.resolve(APP_NAME + ".war").toFile();
         war.as(ZipExporter.class).exportTo(warFile, true);
 
         node1Process = startWildFly(NODE1_PORT_OFFSET, redisNodes, "node1");
@@ -104,8 +109,21 @@ public class RedisSessionFailoverIT {
     @AfterAll
     static void teardown() {
         destroyProcess(node1Process);
+        node1Process = null;
         destroyProcess(node2Process);
-        if (redis != null) redis.stop();
+        node2Process = null;
+        killStaleWildFlyProcesses();
+        if (redis != null) {
+            redis.stop();
+            redis = null;
+        }
+        if (shutdownHook != null) {
+            try {
+                Runtime.getRuntime().removeShutdownHook(shutdownHook);
+            } catch (IllegalStateException ignored) {
+            }
+            shutdownHook = null;
+        }
     }
 
     @Test
@@ -138,6 +156,28 @@ public class RedisSessionFailoverIT {
 
     @Test
     @Order(3)
+    void testMultipleSessionAttributes() throws Exception {
+        String setUrl = String.format("http://localhost:%d/%s/session?action=set&key=attr2&value=secondValue", NODE1_HTTP_PORT, APP_NAME);
+        HttpResponse<String> setResponse = httpClient.send(
+                HttpRequest.newBuilder(URI.create(setUrl)).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, setResponse.statusCode());
+
+        String getUrl1 = String.format("http://localhost:%d/%s/session?action=get&key=testKey", NODE2_HTTP_PORT, APP_NAME);
+        HttpResponse<String> getResponse1 = httpClient.send(
+                HttpRequest.newBuilder(URI.create(getUrl1)).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals("failoverValue", parseBody(getResponse1.body()).get("value"), "Original attribute should still be accessible");
+
+        String getUrl2 = String.format("http://localhost:%d/%s/session?action=get&key=attr2", NODE2_HTTP_PORT, APP_NAME);
+        HttpResponse<String> getResponse2 = httpClient.send(
+                HttpRequest.newBuilder(URI.create(getUrl2)).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals("secondValue", parseBody(getResponse2.body()).get("value"), "Second attribute should be accessible from node2");
+    }
+
+    @Test
+    @Order(4)
     void testKillNode1AndReadFromNode2() throws Exception {
         destroyProcess(node1Process);
         node1Process = null;
@@ -154,12 +194,47 @@ public class RedisSessionFailoverIT {
         assertEquals("failoverValue", body.get("value"), "Session data should survive node1 failure because it is stored in Redis");
     }
 
+    @Test
+    @Order(5)
+    void testSessionInvalidation() throws Exception {
+        String invalidateUrl = String.format("http://localhost:%d/%s/session?action=invalidate", NODE2_HTTP_PORT, APP_NAME);
+        HttpResponse<String> invalidateResponse = httpClient.send(
+                HttpRequest.newBuilder(URI.create(invalidateUrl)).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertEquals(200, invalidateResponse.statusCode());
+        assertTrue(invalidateResponse.body().contains("invalidated="), "Session should be invalidated");
+
+        String getUrl = String.format("http://localhost:%d/%s/session?action=get&key=testKey", NODE2_HTTP_PORT, APP_NAME);
+        HttpResponse<String> getResponse = httpClient.send(
+                HttpRequest.newBuilder(URI.create(getUrl)).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertEquals(404, getResponse.statusCode(), "Invalidated session should not be found");
+    }
+
+    @Test
+    @Order(6)
+    void testNewSessionAfterInvalidation() throws Exception {
+        String setUrl = String.format("http://localhost:%d/%s/session?action=set&key=newKey&value=newValue", NODE2_HTTP_PORT, APP_NAME);
+        HttpResponse<String> setResponse = httpClient.send(
+                HttpRequest.newBuilder(URI.create(setUrl)).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertEquals(200, setResponse.statusCode());
+        Map<String, String> body = parseBody(setResponse.body());
+        String newSessionId = body.get("sessionId");
+        assertNotNull(newSessionId, "New session should be created");
+        assertEquals("newValue", body.get("value"));
+    }
+
     private static Process startWildFly(int portOffset, String redisNodes, String nodeName) throws Exception {
         String javaHome = System.getProperty("java.home");
         String standaloneSh = Path.of(JBOSS_HOME, "bin", "standalone.sh").toString();
 
         ProcessBuilder pb = new ProcessBuilder(
                 standaloneSh,
+                "--stability=community",
                 "-Djboss.socket.binding.port-offset=" + portOffset,
                 "-Djboss.node.name=" + nodeName,
                 "-Djboss.server.data.dir=" + Path.of(JBOSS_HOME, "standalone", "data-" + nodeName),
@@ -193,14 +268,28 @@ public class RedisSessionFailoverIT {
         while (System.currentTimeMillis() < deadline) {
             try {
                 HttpResponse<String> response = probeClient.send(
-                        HttpRequest.newBuilder(URI.create("http://localhost:" + httpPort + "/")).GET().build(),
+                        HttpRequest.newBuilder(URI.create("http://localhost:" + httpPort + "/" + APP_NAME + "/session")).GET().build(),
                         HttpResponse.BodyHandlers.ofString());
-                if (response.statusCode() > 0) return;
+                if (response.statusCode() == 200) return;
             } catch (Exception ignored) {
             }
             Thread.sleep(1000);
         }
         throw new RuntimeException("Server on port " + httpPort + " did not start within " + STARTUP_TIMEOUT);
+    }
+
+    private static void killStaleWildFlyProcesses() {
+        ProcessHandle.allProcesses()
+                .filter(ph -> ph.info().commandLine()
+                        .map(cmd -> cmd.contains("wildfly-distributable") && cmd.contains("org.jboss.as.standalone"))
+                        .orElse(false))
+                .forEach(ph -> {
+                    ph.destroyForcibly();
+                    try {
+                        ph.onExit().get(10, TimeUnit.SECONDS);
+                    } catch (Exception ignored) {
+                    }
+                });
     }
 
     private static void destroyProcess(Process process) {

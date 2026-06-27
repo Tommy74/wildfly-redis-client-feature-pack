@@ -77,7 +77,8 @@ public class RedisSessionManager<C> implements SessionManager<C> {
             this.jedis.expire(key, maxIdleSeconds);
         }
 
-        return CompletableFuture.completedFuture(new RedisSession<>(this.jedis, key, id, this));
+        C context = this.factoryConfig.getSessionContextFactory().get();
+        return CompletableFuture.completedFuture(new RedisSession<>(this.jedis, key, id, this, context));
     }
 
     @Override
@@ -89,7 +90,8 @@ public class RedisSessionManager<C> implements SessionManager<C> {
         Instant now = Instant.now();
         this.jedis.hset(key, "lastAccessStart", String.valueOf(now.toEpochMilli()));
         this.jedis.hset(key, "isNew", "false");
-        return CompletableFuture.completedFuture(new RedisSession<>(this.jedis, key, id, this));
+        C context = this.factoryConfig.getSessionContextFactory().get();
+        return CompletableFuture.completedFuture(new RedisSession<>(this.jedis, key, id, this, context));
     }
 
     @Override
@@ -98,7 +100,8 @@ public class RedisSessionManager<C> implements SessionManager<C> {
         if (!this.jedis.exists(key)) {
             return CompletableFuture.completedFuture(null);
         }
-        return CompletableFuture.completedFuture(new RedisSession<C>(this.jedis, key, id, this));
+        C context = this.factoryConfig.getSessionContextFactory().get();
+        return CompletableFuture.completedFuture(new RedisSession<C>(this.jedis, key, id, this, context));
     }
 
     @Override

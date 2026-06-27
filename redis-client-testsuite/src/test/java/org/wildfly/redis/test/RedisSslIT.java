@@ -19,58 +19,66 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.testcontainers.containers.BindMode;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.wait.strategy.Wait;
 import org.wildfly.extension.redis.injection.RedisConnection;
 import redis.clients.jedis.UnifiedJedis;
 
 @ExtendWith(ArquillianExtension.class)
 public class RedisSslIT {
 
-    private static GenericContainer<?> redis;
+    private static final String CONTAINER_NAME = "redis-ssl-test";
+    private static Process redisProcess;
 
     @Inject
     @RedisConnection("ssl-conn")
     private UnifiedJedis jedis;
 
+    @Inject
+    @RedisConnection("ssl-socket-binding-conn")
+    private UnifiedJedis jedisSslSocketBinding;
+
     @BeforeAll
-    static void startRedis() {
+    static void startRedis() throws Exception {
+        new ProcessBuilder("podman", "rm", "-f", CONTAINER_NAME)
+                .redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                .start().waitFor();
         Path tlsDir = new File("src/test/resources/tls").getAbsoluteFile().toPath();
-        Path truststorePath = tlsDir.resolve("truststore.p12");
-
-        redis = new GenericContainer<>("redis:7-alpine")
-                .withExposedPorts(6379)
-                .withFileSystemBind(tlsDir.toString(), "/tls", BindMode.READ_ONLY)
-                .withCommand(
-                        "redis-server",
-                        "--tls-port", "6379",
-                        "--port", "0",
-                        "--tls-cert-file", "/tls/server-cert.pem",
-                        "--tls-key-file", "/tls/server-key.pem",
-                        "--tls-ca-cert-file", "/tls/ca-cert.pem"
-                )
-                .waitingFor(Wait.forLogMessage(".*Ready to accept connections.*", 1));
-        redis.start();
-
-        String sslHost = redis.getHost();
-        int sslPort = redis.getMappedPort(6379);
-
-        System.setProperty("redis.ssl.nodes", sslHost + ":" + sslPort);
-        System.setProperty("redis.truststore.path", truststorePath.toString());
-        System.setProperty("redis.cluster.nodes", sslHost + ":" + sslPort);
+        ProcessBuilder pb = new ProcessBuilder(
+                "podman", "run", "--rm", "--network", "host",
+                "--name", CONTAINER_NAME,
+                "-v", tlsDir + ":/tls:ro,Z",
+                "redis:7-alpine",
+                "redis-server",
+                "--tls-port", "6380",
+                "--port", "0",
+                "--tls-cert-file", "/tls/server-cert.pem",
+                "--tls-key-file", "/tls/server-key.pem",
+                "--tls-ca-cert-file", "/tls/ca-cert.pem",
+                "--tls-auth-clients", "no"
+        );
+        pb.redirectErrorStream(true);
+        pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
+        redisProcess = pb.start();
+        Thread.sleep(3000);
     }
 
     @AfterAll
     static void stopRedis() {
-        if (redis != null) redis.stop();
+        try {
+            new ProcessBuilder("podman", "stop", CONTAINER_NAME)
+                    .redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .start().waitFor();
+        } catch (Exception ignored) {}
+        if (redisProcess != null) {
+            redisProcess.destroyForcibly();
+        }
     }
 
     @Deployment
     public static WebArchive createDeployment() {
         return ShrinkWrap.create(WebArchive.class, "redis-ssl-test.war")
                 .addClass(RedisSslIT.class)
-                .addAsWebInfResource(EmptyAsset.INSTANCE, "beans.xml");
+                .addAsWebInfResource(EmptyAsset.INSTANCE, "beans.xml")
+                .addPackages(true, "org.hamcrest");
     }
 
     @Test
@@ -86,4 +94,19 @@ public class RedisSslIT {
         assertEquals("ssl-value", value);
         jedis.del(key);
     }
+
+    @Test
+    public void testRedisInjectionViaSslSocketBinding() {
+        assertNotNull(jedisSslSocketBinding, "UnifiedJedis should be injected via SSL + socket binding");
+    }
+
+    @Test
+    public void testRedisSetGetViaSslSocketBinding() {
+        String key = "test-ssl-sb-key-" + System.currentTimeMillis();
+        jedisSslSocketBinding.set(key, "ssl-sb-value");
+        String value = jedisSslSocketBinding.get(key);
+        assertEquals("ssl-sb-value", value);
+        jedisSslSocketBinding.del(key);
+    }
+
 }

@@ -2,7 +2,7 @@
   ~ Copyright The WildFly Authors
   ~ SPDX-License-Identifier: Apache-2.0
   -->
-<build xmlns="urn:wildfly:feature-pack-build:3.1" producer="org.wildfly.redis:redis-client-feature-pack">
+<build xmlns="urn:wildfly:feature-pack-build:3.5" producer="org.wildfly.redis:redis-client-feature-pack">
     <transitive>
         <dependency group-id="org.wildfly" artifact-id="wildfly-ee-galleon-pack">
             <name>org.wildfly:wildfly-ee-galleon-pack</name>
@@ -22,6 +22,8 @@
         <extensions>
             <standalone>
                 <extension>org.wildfly.extension.redis</extension>
+                <extension>org.wildfly.extension.clustering.web</extension>
+                <extension>org.wildfly.extension.clustering.ejb</extension>
             </standalone>
         </extensions>
     </generate-feature-specs>

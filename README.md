@@ -12,6 +12,18 @@ The feature pack also adds a `redis-client` subsystem that manages Redis connect
 - Maven 3.9+
 - Podman (for running Redis locally)
 
+### Running the Integration Tests
+
+The test suite uses [Testcontainers](https://testcontainers.com/). On Fedora/RHEL with Podman:
+
+```bash
+systemctl --user start podman.socket
+export DOCKER_HOST=unix:///run/user/$UID/podman/podman.sock
+export TESTCONTAINERS_RYUK_DISABLED=true
+
+mvn clean install -Denforcer.skip
+```
+
 ---
 
 ## Part 1: Try It Out
@@ -34,7 +46,7 @@ mvn clean install -DskipTests -Denforcer.skip
 
 ```bash
 cd redis-client-example
-mvn wildfly:provision wildfly:dev
+mvn clean wildfly:dev -Denforcer.skip
 ```
 
 The example provisions a WildFly server with the `redis-client` and `redis-web-clustering` layers, configures a Redis connection, and sets up `distributable-web` to store HTTP sessions in Redis.
@@ -56,26 +68,43 @@ curl http://localhost:8080/redis-example/api/redis/get/mykey
 
 **HTTP session management** (`/api/session`):
 
+Build and provision the two demo servers (from the `redis-client-example` directory):
+
 ```bash
-# Create a session and store an attribute
-curl -X PUT http://localhost:8080/redis-example/api/session/color/blue
-# {"sessionId":"...","key":"color","value":"blue"}
-
-# Read the attribute back (use -b/-c to persist cookies, or use a browser)
-curl http://localhost:8080/redis-example/api/session/color
-# {"sessionId":"...","key":"color","value":"blue"}
-
-# View session info
-curl http://localhost:8080/redis-example/api/session
-
-# Invalidate the session
-curl -X DELETE http://localhost:8080/redis-example/api/session
+cd redis-client-example
+mvn clean package -Denforcer.skip
 ```
 
-Because the application uses `<distributable/>` in `web.xml` and the server is configured with `redis-session-management`, all session data is stored in Redis. You can verify this with `redis-cli`:
+Start Redis (if you haven't yet):
 
 ```bash
-podman exec redis redis-cli keys 'wf:session:*'
+podman run --rm -it --name redis -p 6379:6379 redis:7-alpine
+```
+
+Start wildfly node 1:
+
+```bash
+./target/server-1/bin/standalone.sh --stability=community -Djboss.socket.binding.port-offset=100
+```
+
+Start wildfly node 2:
+
+```bash
+./target/server-2/bin/standalone.sh --stability=community -Djboss.socket.binding.port-offset=200
+```
+
+Store session data from wildfly node 2:
+
+```bash
+curl -b cookie.txt -c cookie.txt -X PUT http://localhost:8280/redis-example/api/session/color/BLUE
+{"key":"color","sessionId":"0dde229f-94d4-4e16-8ffb-6dba49580674","value":"BLUE"}
+```
+
+Get the same session data from wildfly node 1:
+
+```bash
+curl -b cookie.txt -c cookie.txt http://localhost:8180/redis-example/api/session/color
+{"sessionId":"0dde229f-94d4-4e16-8ffb-6dba49580674","value":"BLUE","key":"color"}
 ```
 
 ### What the example provisions
@@ -169,7 +198,7 @@ Add the feature pack to your application's `pom.xml`:
 <plugin>
     <groupId>org.wildfly.plugins</groupId>
     <artifactId>wildfly-maven-plugin</artifactId>
-    <version>5.1.1.Final</version>
+    <version>6.0.0.Final</version>
     <configuration>
         <feature-packs>
             <feature-pack>
@@ -386,9 +415,10 @@ Affinity child elements: `<no-affinity/>` (recommended for Redis) or `<local-aff
 
 | Attribute          | Type   | Default    | Description                                                       |
 |--------------------|--------|------------|-------------------------------------------------------------------|
-| `name`             | string | (required) | Provider name, referenced by `default-bean-management`            |
-| `redis-connection` | string | (required) | Reference to a `redis-connection` in the `redis-client` subsystem |
-| `max-active-beans` | int    | (none)     | Maximum active beans before passivation                           |
+| `name`             | string   | (required) | Provider name, referenced by `default-bean-management`                        |
+| `redis-connection` | string   | (required) | Reference to a `redis-connection` in the `redis-client` subsystem             |
+| `max-active-beans` | int      | (none)     | Maximum active beans before passivation                                       |
+| `idle-threshold`   | duration | (none)     | ISO 8601 duration after which a bean is eligible for passivation               |
 
 ### Using Redis in Application Code
 
@@ -460,18 +490,6 @@ Tear it down with:
 
 ```bash
 podman rm -f redis-7000 redis-7001 redis-7002
-```
-
-### Running the Integration Tests
-
-The test suite uses [Testcontainers](https://testcontainers.com/). On Fedora/RHEL with Podman:
-
-```bash
-systemctl --user start podman.socket
-export DOCKER_HOST=unix:///run/user/$UID/podman/podman.sock
-export TESTCONTAINERS_RYUK_DISABLED=true
-
-mvn clean install -Denforcer.skip
 ```
 
 ## Project Structure

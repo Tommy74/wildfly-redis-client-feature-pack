@@ -13,6 +13,7 @@
 
     <properties>
         <jboss.home>${project.build.directory}/wildfly</jboss.home>
+        <ssl.tests.skip>true</ssl.tests.skip>
     </properties>
 
     <dependencies>
@@ -163,6 +164,11 @@
                             <provisioning-dir>${project.build.directory}/wildfly-distributable</provisioning-dir>
                             <feature-packs>
                                 <feature-pack>
+                                    <groupId>org.wildfly</groupId>
+                                    <artifactId>wildfly-galleon-pack</artifactId>
+                                    <version>${version.org.wildfly}</version>
+                                </feature-pack>
+                                <feature-pack>
                                     <groupId>${project.groupId}</groupId>
                                     <artifactId>redis-client-feature-pack</artifactId>
                                     <version>${project.version}</version>
@@ -173,56 +179,18 @@
                                 <layer>redis-client</layer>
                                 <layer>redis-web-clustering</layer>
                             </layers>
-                            <galleon-options>
-                                <jboss-fork-embedded>true</jboss-fork-embedded>
-                            </galleon-options>
                             <packagingScripts>
                                 <packaging-script>
                                     <commands>
-                                        <!-- Default connection using cluster-nodes -->
-                                        <command>/subsystem=redis-client/redis-connection=default:add(cluster-nodes=${redis.cluster.nodes:127.0.0.1:6379})</command>
+                                        <command>/subsystem=distributable-web/redis-session-management=redis:add(redis-connection=default,granularity=SESSION)</command>
+                                        <command>/subsystem=distributable-web/redis-session-management=redis/affinity=none:add()</command>
+                                        <command>/subsystem=distributable-web:write-attribute(name=default-session-management,value=redis)</command>
+                                        <command>/subsystem=distributable-web/redis-single-sign-on-management=redis:add(redis-connection=default)</command>
+                                        <command>/subsystem=distributable-web:write-attribute(name=default-single-sign-on-management,value=redis)</command>
                                     </commands>
                                 </packaging-script>
                             </packagingScripts>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <!-- Patch the distributable server's module.xml to include our overlay JAR -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-antrun-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>patch-distributable-modules</id>
-                        <phase>process-test-classes</phase>
-                        <goals>
-                            <goal>run</goal>
-                        </goals>
-                        <configuration>
-                            <target>
-                                <!-- Copy overlay JAR into clustering.web module -->
-                                <copy file="${settings.localRepository}/org/wildfly/redis/redis-client-session/${project.version}/redis-client-session-${project.version}.jar"
-                                      todir="${project.build.directory}/wildfly-distributable/modules/system/layers/base/org/wildfly/extension/clustering/web/main/"
-                                      overwrite="true"/>
-                                <!-- Patch module.xml to add overlay JAR before original -->
-                                <replace file="${project.build.directory}/wildfly-distributable/modules/system/layers/base/org/wildfly/extension/clustering/web/main/module.xml">
-                                    <replacetoken><![CDATA[<resource-root path="wildfly-clustering-web-extension-]]></replacetoken>
-                                    <replacevalue><![CDATA[<resource-root path="redis-client-session-${project.version}.jar"/>
-        <resource-root path="wildfly-clustering-web-extension-]]></replacevalue>
-                                </replace>
-                                <!-- Add Redis module dependencies -->
-                                <replace file="${project.build.directory}/wildfly-distributable/modules/system/layers/base/org/wildfly/extension/clustering/web/main/module.xml">
-                                    <replacetoken><![CDATA[</dependencies>]]></replacetoken>
-                                    <replacevalue><![CDATA[<module name="redis.clients.jedis"/>
-        <module name="org.wildfly.extension.redis.injection"/>
-    </dependencies>]]></replacevalue>
-                                </replace>
-                                <!-- Patch clustering.ejb module only if it exists -->
-                                <available file="${project.build.directory}/wildfly-distributable/modules/system/layers/base/org/wildfly/extension/clustering/ejb/main/module.xml"
-                                           property="ejb.module.exists"/>
-                                <echo message="EJB clustering module exists: ${ejb.module.exists}"/>
-                            </target>
+                            <stability>community</stability>
                         </configuration>
                     </execution>
                 </executions>
@@ -239,14 +207,38 @@
                 <artifactId>maven-failsafe-plugin</artifactId>
                 <executions>
                     <execution>
+                        <id>default</id>
                         <goals>
                             <goal>integration-test</goal>
                             <goal>verify</goal>
                         </goals>
                         <configuration>
+                            <excludes>
+                                <exclude>**/RedisSsl*IT.java</exclude>
+                            </excludes>
                             <systemPropertyVariables>
                                 <jboss.home>${jboss.home}</jboss.home>
                                 <jboss.home.distributable>${project.build.directory}/wildfly-distributable</jboss.home.distributable>
+                                <redis.truststore.path>${project.basedir}/src/test/resources/tls/truststore.p12</redis.truststore.path>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>ssl-tests</id>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                        <configuration>
+                            <skipTests>${ssl.tests.skip}</skipTests>
+                            <reportsDirectory>${project.build.directory}/failsafe-reports-ssl</reportsDirectory>
+                            <summaryFile>${project.build.directory}/failsafe-reports-ssl/failsafe-summary.xml</summaryFile>
+                            <includes>
+                                <include>**/RedisSsl*IT.java</include>
+                            </includes>
+                            <systemPropertyVariables>
+                                <jboss.home>${jboss.home}</jboss.home>
+                                <redis.truststore.path>${project.basedir}/src/test/resources/tls/truststore.p12</redis.truststore.path>
                             </systemPropertyVariables>
                         </configuration>
                     </execution>

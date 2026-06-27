@@ -47,47 +47,80 @@
 
     <build>
         <finalName>redis-example</finalName>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.wildfly.plugins</groupId>
+                    <artifactId>wildfly-maven-plugin</artifactId>
+                    <configuration>
+                        <feature-packs>
+                            <feature-pack>
+                                <groupId>org.wildfly</groupId>
+                                <artifactId>wildfly-galleon-pack</artifactId>
+                                <version>${version.org.wildfly}</version>
+                            </feature-pack>
+                            <feature-pack>
+                                <groupId>${project.groupId}</groupId>
+                                <artifactId>redis-client-feature-pack</artifactId>
+                                <version>${project.version}</version>
+                            </feature-pack>
+                        </feature-packs>
+                        <layers>
+                            <layer>jaxrs-server</layer>
+                            <layer>redis-client</layer>
+                            <layer>redis-web-clustering</layer>
+                        </layers>
+                        <packagingScripts>
+                            <packaging-script>
+                                <commands>
+                                    <command>/subsystem=distributable-web/redis-session-management=redis:add(redis-connection=default,granularity=SESSION)</command>
+                                    <command>/subsystem=distributable-web/redis-session-management=redis/affinity=none:add()</command>
+                                    <command>/subsystem=distributable-web:write-attribute(name=default-session-management,value=redis)</command>
+                                    <command>/subsystem=distributable-web/redis-single-sign-on-management=redis:add(redis-connection=default)</command>
+                                    <command>/subsystem=distributable-web:write-attribute(name=default-single-sign-on-management,value=redis)</command>
+                                </commands>
+                            </packaging-script>
+                        </packagingScripts>
+                        <stability>community</stability>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
         <plugins>
             <plugin>
                 <groupId>org.wildfly.plugins</groupId>
                 <artifactId>wildfly-maven-plugin</artifactId>
-                <configuration>
-                    <feature-packs>
-                        <feature-pack>
-                            <groupId>org.wildfly</groupId>
-                            <artifactId>wildfly-galleon-pack</artifactId>
-                            <version>${version.org.wildfly}</version>
-                        </feature-pack>
-                        <feature-pack>
-                            <groupId>${project.groupId}</groupId>
-                            <artifactId>redis-client-feature-pack</artifactId>
-                            <version>${project.version}</version>
-                        </feature-pack>
-                    </feature-packs>
-                    <layers>
-                        <layer>jaxrs-server</layer>
-                        <layer>redis-client</layer>
-                        <layer>redis-web-clustering</layer>
-                    </layers>
-                    <galleon-options>
-                        <jboss-fork-embedded>true</jboss-fork-embedded>
-                    </galleon-options>
-                    <packagingScripts>
-                        <packaging-script>
-                            <commands>
-                                <!-- Redis connection -->
-                                <command>/subsystem=redis-client/redis-connection=default:add(cluster-nodes=${redis.cluster.nodes:127.0.0.1:6379})</command>
-                                <!-- Configure distributable-web to use Redis for session management -->
-                                <command>/subsystem=distributable-web/redis-session-management=default:add(redis-connection=default, granularity=SESSION)</command>
-                                <command>/subsystem=distributable-web/redis-session-management=default/affinity=no-affinity:add()</command>
-                                <command>/subsystem=distributable-web:write-attribute(name=default-session-management, value=default)</command>
-                                <!-- Configure distributable-web to use Redis for SSO management -->
-                                <command>/subsystem=distributable-web/redis-single-sign-on-management=default:add(redis-connection=default)</command>
-                                <command>/subsystem=distributable-web:write-attribute(name=default-single-sign-on-management, value=default)</command>
-                            </commands>
-                        </packaging-script>
-                    </packagingScripts>
-                </configuration>
+                <executions>
+                    <!-- Default instance to use with "mvn wildfly:dev": wildfly-maven-plugin takes care of deploying the application -->
+                    <execution>
+                        <id>provision-default-server</id>
+                        <goals>
+                            <goal>package</goal>
+                        </goals>
+                        <configuration combine.children="merge">
+                            <skipDeployment>true</skipDeployment>
+                        </configuration>
+                    </execution>
+                    <!-- Instances to demonstrate session management: they come with the application pre-installed -->
+                    <execution>
+                        <id>provision-server-1</id>
+                        <goals>
+                            <goal>package</goal>
+                        </goals>
+                        <configuration combine.children="merge">
+                            <provisioning-dir>${project.build.directory}/server-1</provisioning-dir>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>provision-server-2</id>
+                        <goals>
+                            <goal>package</goal>
+                        </goals>
+                        <configuration combine.children="merge">
+                            <provisioning-dir>${project.build.directory}/server-2</provisioning-dir>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

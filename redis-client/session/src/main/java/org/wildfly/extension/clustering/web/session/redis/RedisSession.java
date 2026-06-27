@@ -22,13 +22,15 @@ public class RedisSession<C> implements Session<C> {
     private final String key;
     private final String id;
     private final RedisSessionManager<C> manager;
+    private final C context;
     private volatile boolean valid = true;
 
-    RedisSession(UnifiedJedis jedis, String key, String id, RedisSessionManager<C> manager) {
+    RedisSession(UnifiedJedis jedis, String key, String id, RedisSessionManager<C> manager, C context) {
         this.jedis = jedis;
         this.key = key;
         this.id = id;
         this.manager = manager;
+        this.context = context;
     }
 
     @Override
@@ -38,7 +40,7 @@ public class RedisSession<C> implements Session<C> {
 
     @Override
     public boolean isValid() {
-        return this.valid && this.jedis.exists(this.key);
+        return this.valid;
     }
 
     @Override
@@ -65,12 +67,12 @@ public class RedisSession<C> implements Session<C> {
 
     @Override
     public C getContext() {
-        return null;
+        return this.context;
     }
 
     @Override
     public void close() {
-        if (this.valid && this.jedis.exists(this.key)) {
+        if (this.valid) {
             Instant now = Instant.now();
             this.jedis.hset(this.key, "lastAccessEnd", String.valueOf(now.toEpochMilli()));
             String maxIdleStr = this.jedis.hget(this.key, "maxIdle");

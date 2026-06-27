@@ -9,4 +9,12 @@
         <layer name="web-clustering"/>
         <layer name="redis-client"/>
     </dependencies>
+    <packages>
+        <package name="org.wildfly.extension.clustering.web"/>
+        <package name="org.wildfly.extension.clustering.ejb"/>
+    </packages>
+    <feature spec="subsystem.redis-client.redis-connection">
+        <param name="redis-connection" value="default"/>
+        <param name="cluster-nodes" value="${redis.cluster.nodes:127.0.0.1:6379}"/>
+    </feature>
 </layer-spec>
