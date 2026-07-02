@@ -70,6 +70,9 @@
                             <layer>redis-client</layer>
                             <layer>redis-web-clustering</layer>
                         </layers>
+                        <galleon-options>
+                            <jboss-fork-embedded>true</jboss-fork-embedded>
+                        </galleon-options>
                         <packagingScripts>
                             <packaging-script>
                                 <commands>
@@ -91,9 +94,10 @@
                 <groupId>org.wildfly.plugins</groupId>
                 <artifactId>wildfly-maven-plugin</artifactId>
                 <executions>
-                    <!-- Default instance to use with "mvn wildfly:dev": wildfly-maven-plugin takes care of deploying the application -->
+                    <!-- Default instance to use with "mvn wildfly:dev": it has no application deployed
+                         because wildfly-maven-plugin dev takes care of deploying the application -->
                     <execution>
-                        <id>provision-default-server</id>
+                        <id>provision-dev-server</id>
                         <goals>
                             <goal>package</goal>
                         </goals>
@@ -101,27 +105,55 @@
                             <skipDeployment>true</skipDeployment>
                         </configuration>
                     </execution>
-                    <!-- Instances to demonstrate session management: they come with the application pre-installed -->
+                    <!-- Complete server instance: they come with the application pre-installed -->
                     <execution>
-                        <id>provision-server-1</id>
+                        <id>provision-complete-server</id>
                         <goals>
                             <goal>package</goal>
                         </goals>
                         <configuration combine.children="merge">
-                            <provisioning-dir>${project.build.directory}/server-1</provisioning-dir>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>provision-server-2</id>
-                        <goals>
-                            <goal>package</goal>
-                        </goals>
-                        <configuration combine.children="merge">
-                            <provisioning-dir>${project.build.directory}/server-2</provisioning-dir>
+                            <provisioning-dir>${project.build.directory}/server-complete</provisioning-dir>
                         </configuration>
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-server-complete-to-server-1</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/server-1</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>${project.build.directory}/server-complete</directory>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>copy-server-complete-to-server-2</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/server-2</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>${project.build.directory}/server-complete</directory>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
         </plugins>
     </build>
 </project>

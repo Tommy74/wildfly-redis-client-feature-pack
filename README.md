@@ -66,6 +66,13 @@ curl http://localhost:8080/redis-example/api/redis/get/mykey
 # myvalue
 ```
 
+Check session data is actually in redis:
+
+```bash
+podman exec redis redis-cli keys 'wf:session:*'
+wf:session:redis-example.war:f975930d-bd00-48c7-98fe-cf78b319707c
+````
+
 **HTTP session management** (`/api/session`):
 
 Build and provision the two demo servers (from the `redis-client-example` directory):

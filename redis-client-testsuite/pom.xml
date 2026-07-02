@@ -179,17 +179,7 @@
                                 <layer>redis-client</layer>
                                 <layer>redis-web-clustering</layer>
                             </layers>
-                            <packagingScripts>
-                                <packaging-script>
-                                    <commands>
-                                        <command>/subsystem=distributable-web/redis-session-management=redis:add(redis-connection=default,granularity=SESSION)</command>
-                                        <command>/subsystem=distributable-web/redis-session-management=redis/affinity=none:add()</command>
-                                        <command>/subsystem=distributable-web:write-attribute(name=default-session-management,value=redis)</command>
-                                        <command>/subsystem=distributable-web/redis-single-sign-on-management=redis:add(redis-connection=default)</command>
-                                        <command>/subsystem=distributable-web:write-attribute(name=default-single-sign-on-management,value=redis)</command>
-                                    </commands>
-                                </packaging-script>
-                            </packagingScripts>
+
                             <stability>community</stability>
                         </configuration>
                     </execution>

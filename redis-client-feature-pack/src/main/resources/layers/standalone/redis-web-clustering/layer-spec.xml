@@ -17,4 +17,5 @@
         <param name="redis-connection" value="default"/>
         <param name="cluster-nodes" value="${redis.cluster.nodes:127.0.0.1:6379}"/>
     </feature>
+
 </layer-spec>
