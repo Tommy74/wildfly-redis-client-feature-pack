@@ -1,0 +1,8 @@
+embed-server --server-config=standalone.xml --stability=community
+/subsystem=distributable-web/redis-session-management=redis:add(redis-connection=default,granularity=SESSION)
+/subsystem=distributable-web/redis-session-management=redis/affinity=none:add()
+/subsystem=distributable-web:write-attribute(name=default-session-management,value=redis)
+/subsystem=distributable-web/redis-single-sign-on-management=redis:add(redis-connection=default)
+/subsystem=distributable-web:write-attribute(name=default-single-sign-on-management,value=redis)
+:reload
+stop-embedded-server
